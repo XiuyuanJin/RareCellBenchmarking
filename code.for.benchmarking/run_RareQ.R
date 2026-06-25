@@ -1,6 +1,6 @@
 setwd("/home/jinxiuyuan/Proj_scCellFishing/")
 
-library(CellSIUS)
+library(RareQ)
 library(Seurat)
 library(dplyr)
 
@@ -35,35 +35,31 @@ load(input_file)
 P1.seurat.obj <- NormalizeData(P1.seurat.obj) %>% 
   FindVariableFeatures() %>% 
   ScaleData() %>% 
-  RunPCA() %>% 
-  FindNeighbors() %>%
-  FindClusters()
+  RunPCA(npcs = 50) %>% 
+  RunUMAP(reduction = "pca",dims = 1:50)
 
-norm.counts    <- GetAssayData(P1.seurat.obj,assay = "RNA",slot = "data") %>% as.matrix()
-cluster        <- P1.seurat.obj$seurat_clusters %>% as.character()
-names(cluster) <- colnames(P1.seurat.obj)
+P1.seurat.obj <- FindNeighbors(
+  object = P1.seurat.obj,
+  k.param = 20,
+  compute.SNN = FALSE,
+  prune.SNN = 0,
+  reduction = "pca",
+  dims = 1:50,
+  force.recalc = FALSE,
+  return.neighbor = TRUE
+)
 
 
 ## -----------------------------
-## Run CellSIUS
+## Run RareQ
 ## -----------------------------
-start_time     <- Sys.time()
-CellSIUS.out   <- CellSIUS(mat.norm = norm.counts, 
-                           group_id = cluster, 
-                           min_n_cells = 10, 
-                           min_fc = 2,
-                           corr_cutoff = NULL, 
-                           iter = 0, 
-                           max_perc_cells = 50,
-                           fc_between_cutoff = 1, 
-                           mcl_path = "/home/jinxiuyuan/mcl/local/bin/mcl")
-end_time       <- Sys.time()
-
+start_time    <- Sys.time()
+final_cluster <- FindRare(P1.seurat.obj)
+end_time      <- Sys.time()
 
 compute_time   <- as.numeric(difftime(end_time, start_time, units = "secs")) / 60
 
-Result_List    <- CellSIUS_GetResults(CellSIUS.out = CellSIUS.out)
-final_cluster  <- CellSIUS_final_cluster_assignment(CellSIUS.out, group_id = cluster, min_n_genes = 3) %>% as.data.frame()
+final_cluster  <- final_cluster %>% as.data.frame()
 colnames(final_cluster) <- "cluster"
 rownames(final_cluster) <- colnames(P1.seurat.obj)
 
@@ -74,14 +70,14 @@ rownames(final_cluster) <- colnames(P1.seurat.obj)
 rare.cell      <- colnames(subset(P1.seurat.obj, cell_type %in% clusters[[Celltype]]))
 major.cell     <- setdiff(colnames(P1.seurat.obj),rare.cell)
 
-rare.clst      <- names(table(final_cluster[rownames(final_cluster) %in% rare.cell, ]))[which.max(table(final_cluster[rownames(final_cluster) %in% rare.cell, ]))]
-CellSius.clst  <- subset(final_cluster, cluster %in% rare.clst)
-CellSius.major <- subset(final_cluster, cluster != rare.clst)
+rare.clst <- names(table(final_cluster[rownames(final_cluster) %in% rare.cell, ]))[which.max(table(final_cluster[rownames(final_cluster) %in% rare.cell, ]))]
+RareQ.clst  <- subset(final_cluster, cluster %in% rare.clst)
+RareQ.major <- subset(final_cluster, cluster != rare.clst)
 
-TP <- length(intersect(rownames(CellSius.clst),rare.cell))
-FP <- length(intersect(rownames(CellSius.clst),major.cell))      
-TN <- length(intersect(rownames(CellSius.major),major.cell))
-FN <- length(intersect(rownames(CellSius.major),rare.cell))
+TP <- length(intersect(rownames(RareQ.clst),rare.cell))
+FP <- length(intersect(rownames(RareQ.clst),major.cell))      
+TN <- length(intersect(rownames(RareQ.major),major.cell))
+FN <- length(intersect(rownames(RareQ.major),rare.cell))
 
 precision <- TP/(TP+FP)
 recall    <- TP/(TP+FN)
@@ -107,5 +103,5 @@ rownames(result) <- experimentID
 ## -----------------------------
 ## Save result
 ## -----------------------------
-write.csv(result,file = paste0(output_dir, "/CellSIUS_", Celltype, ".csv"),row.names = TRUE)
+write.csv(result,file = paste0(output_dir, "/RareQ_", Celltype, ".csv"),row.names = TRUE)
 

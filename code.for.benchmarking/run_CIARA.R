@@ -54,7 +54,7 @@ data_ciara  <- cluster_analysis_integrate_rare(read.counts, exprimentID, 0.01, 5
 end_time      <- Sys.time()
 
 
-comput_time   <- as.numeric(difftime(end_time, start_time, units = "secs")) / 60
+compute_time   <- as.numeric(difftime(end_time, start_time, units = "secs")) / 60
 
 final_cluster <- merge_cluster(data_cluster, data_ciara$seurat_clusters, max_number = 20)
 final_cluster <- as.data.frame(final_cluster)

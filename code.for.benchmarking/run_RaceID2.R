@@ -1,6 +1,6 @@
 setwd("/home/jinxiuyuan/Proj_scCellFishing/")
 
-library(aKNNO)
+source("software/StemID-master/RaceID2_StemID_class.R")
 library(Seurat)
 library(dplyr)
 
@@ -31,47 +31,43 @@ dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 ## Load Seurat object
 ## -----------------------------
 load(input_file)
-        
-P1.seurat.obj <- NormalizeData(P1.seurat.obj) %>% 
-  FindVariableFeatures() %>% 
-  ScaleData() %>% 
-  RunPCA() %>% 
-  RunUMAP(reduction = "pca",dims = 1:30)
+
+read.counts <- GetAssayData(P1.seurat.obj,assay = "RNA",slot = "counts") %>% as.matrix()
 
 
 ## -----------------------------
-## Run aKNNO
+## Run RaceID2
 ## -----------------------------
-start_time    <- Sys.time()
-P1.seurat.obj <- FindNeighbors_aKNNO(P1.seurat.obj,verbose = F)
-P1.seurat.obj <- FindClusters(P1.seurat.obj,graph.name="aKNN_O",verbose=F)
-end_time      <- Sys.time()
-        
+start_time  <- Sys.time()
+sc          <- SCseq(read.counts)
+sc          <- filterdata(sc)
+sc          <- clustexp(sc)
+sc          <- findoutliers(sc)
+final       <- data.frame(CELLID = names(sc@cpart), cluster = sc@cpart)
+end_time    <- Sys.time()
+
 compute_time   <- as.numeric(difftime(end_time, start_time, units = "secs")) / 60
-        
-final_cluster  <- P1.seurat.obj$aKNN_O_res.0.8 %>% as.data.frame()
-colnames(final_cluster) <- "cluster"
 
 
 ## -----------------------------
 ## Calculate performance metrics
 ## -----------------------------      
-rare.cell      <- colnames(subset(P1.seurat.obj, cell_type %in% clusters[[Celltype]]))
-major.cell     <- setdiff(colnames(P1.seurat.obj),rare.cell)
-        
-rare.clst      <- names(table(final_cluster[rownames(final_cluster) %in% rare.cell, ]))[which.max(table(final_cluster[rownames(final_cluster) %in% rare.cell, ]))]
-aKNNO.clst     <- subset(final_cluster, cluster %in% rare.clst)
-aKNNO.major    <- subset(final_cluster, cluster != rare.clst)
-        
-TP <- length(intersect(rownames(aKNNO.clst),rare.cell))
-FP <- length(intersect(rownames(aKNNO.clst),major.cell))      
-TN <- length(intersect(rownames(aKNNO.major),major.cell))
-FN <- length(intersect(rownames(aKNNO.major),rare.cell))
-        
+rare.cell   <- colnames(subset(P1.seurat.obj, cell_type %in% clusters[[Celltype]]))
+major.cell  <- setdiff(colnames(P1.seurat.obj),rare.cell)
+
+rare.clst    <- names(table(final[final$CELLID %in% rare.cell,]$cluster))[which.max(table(final[final$CELLID %in% rare.cell,]$cluster))]
+Raceid.clst  <- subset(final, cluster %in% rare.clst)
+Raceid.major <- subset(final, cluster != rare.clst)
+
+TP <- length(intersect(rownames(Raceid.clst),rare.cell))
+FP <- length(intersect(rownames(Raceid.clst),major.cell))      
+TN <- length(intersect(rownames(Raceid.major),major.cell))
+FN <- length(intersect(rownames(Raceid.major),rare.cell))
+
 precision <- TP/(TP+FP)
 recall    <- TP/(TP+FN)
 F1.score  <- (2*precision*recall)/(precision+recall)
-        
+
 result <- data.frame(
   Experiment = experimentID,
   NumRare = length(rare.cell),
@@ -88,9 +84,9 @@ result <- data.frame(
 
 rownames(result) <- experimentID        
 
-  
+
 ## -----------------------------
 ## Save result
 ## -----------------------------
-write.csv(result,file = paste0(output_dir, "/aKNNO_", Celltype, ".csv"),row.names = TRUE)
+write.csv(result,file = paste0(output_dir, "/RaceID2_", Celltype, ".csv"),row.names = TRUE)
 
