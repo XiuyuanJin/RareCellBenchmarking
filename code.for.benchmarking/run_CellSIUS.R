@@ -39,7 +39,7 @@ P1.seurat.obj <- NormalizeData(P1.seurat.obj) %>%
   FindNeighbors() %>%
   FindClusters()
 
-norm.counts    <- P1.seurat.obj@assays$RNA@data %>% as.matrix()
+norm.counts    <- GetAssayData(P1.seurat.obj,assay = "RNA",slot = "data") %>% as.matrix()
 cluster        <- P1.seurat.obj$seurat_clusters %>% as.character()
 names(cluster) <- colnames(P1.seurat.obj)
 
