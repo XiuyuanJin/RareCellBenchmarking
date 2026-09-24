@@ -16,6 +16,4 @@ For detailed installation instructions for each rare cell detection method, plea
 
 ## Demo
 
-The `demo` folder contains an example, including the analysis code, input files, and output files. The supplied output files serve as reference results for the example.
-
 To use your own data, adapt the example code and update the input and output paths accordingly.
